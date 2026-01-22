@@ -599,7 +599,7 @@ class MainWindow(QMainWindow):
         # About
         about_label = QLabel(
             "YouTube Downloader Pro v1.0\n\n"
-            "Made by Cybertron\n"
+            "Made by Ankit\n"
             "Contact: ankit.cybertron@gmail.com"
         )
         about_label.setAlignment(Qt.AlignCenter)
