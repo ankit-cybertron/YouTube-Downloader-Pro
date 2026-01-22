@@ -599,7 +599,7 @@ class MainWindow(QMainWindow):
         # About
         about_label = QLabel(
             "YouTube Downloader Pro v1.0\n\n"
-            "Made by Ankit\n"
+            "Made by Cybertron\n"
             "Contact: ankit.cybertron@gmail.com"
         )
         about_label.setAlignment(Qt.AlignCenter)
@@ -795,84 +795,70 @@ class MainWindow(QMainWindow):
     # Event handlers
     @Slot()
     def _on_update_app(self):
-        """Check for updates via git pull."""
-        # Determine starting path
-        if getattr(sys, 'frozen', False):
-            # Running as compiled app (inside .app/Contents/MacOS)
-            start_path = Path(sys.executable).parent
-        else:
-            # Running from source
-            start_path = Path(__file__).parent
+        """Check for updates via GitHub Releases."""
+        CURRENT_VERSION = "1.0.0"
+        REPO_USER = "ankit-cybertron"
+        REPO_NAME = "YouTube-Downloader-Pro"
+        VERSION_URL = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/version.txt"
+        RELEASE_URL = f"https://github.com/{REPO_USER}/{REPO_NAME}/releases/latest/download/YouTube.Downloader.Pro.zip"
         
-        # Search for .git directory upwards
-        git_root = None
-        check_path = start_path
+        self.setCursor(Qt.WaitCursor)
+        self.update_btn.setEnabled(False)
+        self.update_btn.setText("Checking...")
         
-        # Walk up up to 6 levels to find .git
-        for _ in range(6):
-            if (check_path / ".git").exists():
-                git_root = check_path
-                break
-            if check_path.parent == check_path:  # Hit root
-                break
-            check_path = check_path.parent
-            
-        if not git_root:
-            # Git repo not found automatically. Ask user to locate it.
-            msg = "Git repository not found automatically.\n\n" \
-                  "Since you are running the app outside the project folder,\n" \
-                  "please locate the 'yt-downloader-pro' folder to check for updates."
-            
-            reply = QMessageBox.question(self, "Locate Project", msg, 
-                                       QMessageBox.Ok | QMessageBox.Cancel)
-            
-            if reply == QMessageBox.Ok:
-                git_root_str = QFileDialog.getExistingDirectory(self, "Select yt-downloader-pro Folder")
-                if git_root_str:
-                    git_root = Path(git_root_str)
-                    if not (git_root / ".git").exists():
-                        QMessageBox.warning(self, "Invalid Folder", 
-                                          "The selected folder does not contain a git repository.")
-                        return
-                else:
-                    return
-            else:
-                return
-
         try:
-            # Check for git
-            subprocess.run(["git", "--version"], check=True, capture_output=True)
+            import requests
+            from packaging import version
             
-            # Fetch and pull
-            self.setCursor(Qt.WaitCursor)
-            # Run git pull
-            result = subprocess.run(
-                ["git", "pull"], 
-                cwd=str(git_root), 
-                capture_output=True, 
-                text=True
-            )
-            self.setCursor(Qt.ArrowCursor)
+            # Check remote version
+            response = requests.get(VERSION_URL, timeout=5)
+            response.raise_for_status()
+            remote_version = response.text.strip()
             
-            if result.returncode == 0:
-                if "Already up to date" in result.stdout:
-                    QMessageBox.information(self, "No Updates", "App is already up to date.")
-                else:
-                    QMessageBox.information(self, "Update Successful", 
-                                          "App source updated successfully!\n"
-                                          f"Please rebuild the app to see changes in the standalone version.\n\n"
-                                          f"Updated: {git_root}\n\n"
-                                          f"Output:\n{result.stdout}")
+            if version.parse(remote_version) > version.parse(CURRENT_VERSION):
+                self.setCursor(Qt.ArrowCursor)
+                self.update_btn.setEnabled(True)
+                self.update_btn.setText("Check for Updates")
+                
+                reply = QMessageBox.question(
+                    self, 
+                    "Update Available", 
+                    f"A new version ({remote_version}) is available!\n\n"
+                    "Would you like to download and install it now?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                
+                if reply == QMessageBox.Yes:
+                    # open browser to release page is safest for macOS permissions
+                    # but user requested automatic. We can try opening the direct download
+                    import webbrowser
+                    webbrowser.open(RELEASE_URL)
+                    
+                    QMessageBox.information(
+                        self,
+                        "Downloading Update",
+                        "The update is downloading in your browser.\n\n"
+                        "Once downloaded:\n"
+                        "1. Unzip the file\n"
+                        "2. Replace the old app with the new one"
+                    )
             else:
-                QMessageBox.critical(self, "Update Failed", 
-                                   f"Git pull failed:\n{result.stderr}")
-                                   
-        except FileNotFoundError:
+                self.setCursor(Qt.ArrowCursor)
+                self.update_btn.setEnabled(True)
+                self.update_btn.setText("Check for Updates")
+                QMessageBox.information(self, "No Updates", f"You are on the latest version ({CURRENT_VERSION}).")
+                
+        except ImportError:
             self.setCursor(Qt.ArrowCursor)
-            QMessageBox.critical(self, "Error", "Git not found. Please install Git.")
+            self.update_btn.setEnabled(True)
+            self.update_btn.setText("Check for Updates")
+            QMessageBox.warning(self, "Error", "Missing dependencies. Please report to developer.")
+            
         except Exception as e:
             self.setCursor(Qt.ArrowCursor)
-            QMessageBox.critical(self, "Error", f"Update failed: {str(e)}")
+            self.update_btn.setEnabled(True)
+            self.update_btn.setText("Check for Updates")
+            QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates.\nError: {str(e)}")
 
     @Slot()
     def _on_browse_folder(self):
