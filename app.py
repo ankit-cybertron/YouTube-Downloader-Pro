@@ -16,6 +16,7 @@ Features:
 
 import sys
 import os
+import subprocess
 import re
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -581,12 +582,23 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(duplicate_section)
         
+        # Update App
+        update_section = QHBoxLayout()
+        update_section.addStretch()
+        
+        update_btn = QPushButton("Check for Updates")
+        update_btn.setFixedWidth(180)
+        update_btn.clicked.connect(self._on_update_app)
+        update_section.addWidget(update_btn)
+        update_section.addStretch()
+        
+        layout.addLayout(update_section)
+        
         layout.addStretch()
         
         # About
         about_label = QLabel(
-            "YouTube Downloader Pro v1.0\n"
-            "Built with PySide6 & yt-dlp\n\n"
+            "YouTube Downloader Pro v1.0\n\n"
             "Made by Cybertron\n"
             "Contact: ankit.cybertron@gmail.com"
         )
@@ -781,6 +793,87 @@ class MainWindow(QMainWindow):
         self.download_btn.setObjectName("downloadBtn")
     
     # Event handlers
+    @Slot()
+    def _on_update_app(self):
+        """Check for updates via git pull."""
+        # Determine starting path
+        if getattr(sys, 'frozen', False):
+            # Running as compiled app (inside .app/Contents/MacOS)
+            start_path = Path(sys.executable).parent
+        else:
+            # Running from source
+            start_path = Path(__file__).parent
+        
+        # Search for .git directory upwards
+        git_root = None
+        check_path = start_path
+        
+        # Walk up up to 6 levels to find .git
+        for _ in range(6):
+            if (check_path / ".git").exists():
+                git_root = check_path
+                break
+            if check_path.parent == check_path:  # Hit root
+                break
+            check_path = check_path.parent
+            
+        if not git_root:
+            # Git repo not found automatically. Ask user to locate it.
+            msg = "Git repository not found automatically.\n\n" \
+                  "Since you are running the app outside the project folder,\n" \
+                  "please locate the 'yt-downloader-pro' folder to check for updates."
+            
+            reply = QMessageBox.question(self, "Locate Project", msg, 
+                                       QMessageBox.Ok | QMessageBox.Cancel)
+            
+            if reply == QMessageBox.Ok:
+                git_root_str = QFileDialog.getExistingDirectory(self, "Select yt-downloader-pro Folder")
+                if git_root_str:
+                    git_root = Path(git_root_str)
+                    if not (git_root / ".git").exists():
+                        QMessageBox.warning(self, "Invalid Folder", 
+                                          "The selected folder does not contain a git repository.")
+                        return
+                else:
+                    return
+            else:
+                return
+
+        try:
+            # Check for git
+            subprocess.run(["git", "--version"], check=True, capture_output=True)
+            
+            # Fetch and pull
+            self.setCursor(Qt.WaitCursor)
+            # Run git pull
+            result = subprocess.run(
+                ["git", "pull"], 
+                cwd=str(git_root), 
+                capture_output=True, 
+                text=True
+            )
+            self.setCursor(Qt.ArrowCursor)
+            
+            if result.returncode == 0:
+                if "Already up to date" in result.stdout:
+                    QMessageBox.information(self, "No Updates", "App is already up to date.")
+                else:
+                    QMessageBox.information(self, "Update Successful", 
+                                          "App source updated successfully!\n"
+                                          f"Please rebuild the app to see changes in the standalone version.\n\n"
+                                          f"Updated: {git_root}\n\n"
+                                          f"Output:\n{result.stdout}")
+            else:
+                QMessageBox.critical(self, "Update Failed", 
+                                   f"Git pull failed:\n{result.stderr}")
+                                   
+        except FileNotFoundError:
+            self.setCursor(Qt.ArrowCursor)
+            QMessageBox.critical(self, "Error", "Git not found. Please install Git.")
+        except Exception as e:
+            self.setCursor(Qt.ArrowCursor)
+            QMessageBox.critical(self, "Error", f"Update failed: {str(e)}")
+
     @Slot()
     def _on_browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", self.output_dir)
