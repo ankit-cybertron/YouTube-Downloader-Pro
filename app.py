@@ -33,6 +33,26 @@ from PySide6.QtCore import Qt, Slot, QTimer, QSize
 from PySide6.QtGui import QPalette, QColor, QFont
 
 from worker import DownloadManager, DownloadMode
+from PySide6.QtCore import QThread, Signal
+
+class UpdateWorker(QThread):
+    """Worker thread for checking updates."""
+    finished = Signal(bool, str, str)  # success, version/error, url
+    
+    def run(self):
+        REPO_USER = "ankit-cybertron"
+        REPO_NAME = "YouTube-Downloader-Pro"
+        VERSION_URL = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/version.txt"
+        RELEASE_URL = f"https://github.com/{REPO_USER}/{REPO_NAME}/releases/latest/download/YouTube.Downloader.Pro.zip"
+        
+        try:
+            import requests
+            response = requests.get(VERSION_URL, timeout=10)
+            response.raise_for_status()
+            remote_version = response.text.strip()
+            self.finished.emit(True, remote_version, RELEASE_URL)
+        except Exception as e:
+            self.finished.emit(False, str(e), "")
 
 
 class DuplicateDialog(QDialog):
@@ -222,6 +242,7 @@ class MainWindow(QMainWindow):
         
         # Track widgets
         self.download_cards: Dict[str, DownloadCard] = {}
+        self.update_worker = None
         
         # Setup
         self._setup_ui()
@@ -795,70 +816,59 @@ class MainWindow(QMainWindow):
     # Event handlers
     @Slot()
     def _on_update_app(self):
-        """Check for updates via GitHub Releases."""
-        CURRENT_VERSION = "1.0.0"
-        REPO_USER = "ankit-cybertron"
-        REPO_NAME = "YouTube-Downloader-Pro"
-        VERSION_URL = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/version.txt"
-        RELEASE_URL = f"https://github.com/{REPO_USER}/{REPO_NAME}/releases/latest/download/YouTube.Downloader.Pro.zip"
-        
+        """Check for updates via GitHub Releases (Async)."""
+        if self.update_worker and self.update_worker.isRunning():
+            return
+            
         self.setCursor(Qt.WaitCursor)
         self.update_btn.setEnabled(False)
         self.update_btn.setText("Checking...")
         
-        try:
-            import requests
-            from packaging import version
-            
-            # Check remote version
-            response = requests.get(VERSION_URL, timeout=5)
-            response.raise_for_status()
-            remote_version = response.text.strip()
-            
-            if version.parse(remote_version) > version.parse(CURRENT_VERSION):
-                self.setCursor(Qt.ArrowCursor)
-                self.update_btn.setEnabled(True)
-                self.update_btn.setText("Check for Updates")
-                
-                reply = QMessageBox.question(
-                    self, 
-                    "Update Available", 
-                    f"A new version ({remote_version}) is available!\n\n"
-                    "Would you like to download and install it now?",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                
-                if reply == QMessageBox.Yes:
-                    # open browser to release page is safest for macOS permissions
-                    # but user requested automatic. We can try opening the direct download
-                    import webbrowser
-                    webbrowser.open(RELEASE_URL)
-                    
-                    QMessageBox.information(
-                        self,
-                        "Downloading Update",
-                        "The update is downloading in your browser.\n\n"
-                        "Once downloaded:\n"
-                        "1. Unzip the file\n"
-                        "2. Replace the old app with the new one"
+        self.update_worker = UpdateWorker()
+        self.update_worker.finished.connect(self._on_update_check_finished)
+        self.update_worker.start()
+    
+    @Slot(bool, str, str)
+    def _on_update_check_finished(self, success: bool, result: str, release_url: str):
+        """Handle update check result."""
+        self.setCursor(Qt.ArrowCursor)
+        self.update_btn.setEnabled(True)
+        self.update_btn.setText("Check for Updates")
+        self.update_worker = None
+        
+        CURRENT_VERSION = "1.0.0"
+        
+        if success:
+            remote_version = result
+            try:
+                from packaging import version
+                if version.parse(remote_version) > version.parse(CURRENT_VERSION):
+                    reply = QMessageBox.question(
+                        self, 
+                        "Update Available", 
+                        f"A new version ({remote_version}) is available!\n\n"
+                        "Would you like to download and install it now?",
+                        QMessageBox.Yes | QMessageBox.No
                     )
-            else:
-                self.setCursor(Qt.ArrowCursor)
-                self.update_btn.setEnabled(True)
-                self.update_btn.setText("Check for Updates")
-                QMessageBox.information(self, "No Updates", f"You are on the latest version ({CURRENT_VERSION}).")
-                
-        except ImportError:
-            self.setCursor(Qt.ArrowCursor)
-            self.update_btn.setEnabled(True)
-            self.update_btn.setText("Check for Updates")
-            QMessageBox.warning(self, "Error", "Missing dependencies. Please report to developer.")
-            
-        except Exception as e:
-            self.setCursor(Qt.ArrowCursor)
-            self.update_btn.setEnabled(True)
-            self.update_btn.setText("Check for Updates")
-            QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates.\nError: {str(e)}")
+                    
+                    if reply == QMessageBox.Yes:
+                        import webbrowser
+                        webbrowser.open(release_url)
+                        
+                        QMessageBox.information(
+                            self,
+                            "Downloading Update",
+                            "The update is downloading in your browser.\n\n"
+                            "Once downloaded:\n"
+                            "1. Unzip the file\n"
+                            "2. Replace the old app with the new one"
+                        )
+                else:
+                    QMessageBox.information(self, "No Updates", f"You are on the latest version ({CURRENT_VERSION}).")
+            except Exception as e:
+                QMessageBox.warning(self, "Version Error", f"Could not parse version: {e}")
+        else:
+            QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates.\nError: {result}")
 
     @Slot()
     def _on_browse_folder(self):
