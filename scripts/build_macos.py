@@ -52,11 +52,22 @@ def build_app():
         # Collect all of yt_dlp to be safe
         "--collect-all", "yt_dlp",
         
-        # Optimization: Exclude unnecessary heavy modules if possible
+        # Optimization: Exclude unnecessary heavy modules
         "--exclude-module", "tkinter",
         "--exclude-module", "matplotlib",
         "--exclude-module", "scipy",
         "--exclude-module", "numpy",
+        "--exclude-module", "pandas",
+        "--exclude-module", "PySide6.QtQuick",
+        "--exclude-module", "PySide6.QtQml",
+        "--exclude-module", "PySide6.Qt3DCore",
+        "--exclude-module", "PySide6.QtWebEngineCore",
+        "--exclude-module", "PySide6.QtWebSockets",
+        "--exclude-module", "PySide6.QtMultimedia",
+        "--exclude-module", "PySide6.QtCharts",
+        "--exclude-module", "PySide6.QtDataVisualization",
+        "--exclude-module", "PySide6.QtSensors",
+        "--exclude-module", "PySide6.QtTest",
         
         # Entry Point
         str(project_root / "src/desktop/main.py")
