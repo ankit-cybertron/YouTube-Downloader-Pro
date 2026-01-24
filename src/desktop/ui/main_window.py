@@ -1,220 +1,23 @@
-#!/usr/bin/env python3
-"""
-app.py - YouTube Downloader Pro
-
-A modern, minimal macOS desktop application for downloading YouTube content.
-Built with PySide6 (Qt 6) and yt-dlp.
-
-Features:
-- Clean tabbed interface
-- Audio/Video download modes
-- Video quality selection
-- Parallel downloads with pause/resume
-- Download history
-- Dark mode UI
-"""
 
 import sys
 import os
-import subprocess
-import re
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 from datetime import datetime
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, QSpinBox,
-    QProgressBar, QFileDialog, QRadioButton, QButtonGroup,
+    QProgressBar, QFileDialog, QButtonGroup,
     QListWidget, QListWidgetItem, QFrame, QMessageBox,
-    QTabWidget, QScrollArea, QSizePolicy, QStackedWidget, QDialog
+    QTabWidget, QScrollArea, QSizePolicy
 )
-from PySide6.QtCore import Qt, Slot, QTimer, QSize
-from PySide6.QtGui import QPalette, QColor, QFont
+from PySide6.QtCore import Qt, Slot, QSize
+from PySide6.QtGui import QPalette, QColor, QFont, QIcon
 
-from worker import DownloadManager, DownloadMode
-from PySide6.QtCore import QThread, Signal
-
-class UpdateWorker(QThread):
-    """Worker thread for checking updates."""
-    finished = Signal(bool, str, str)  # success, version/error, url
-    
-    def run(self):
-        REPO_USER = "ankit-cybertron"
-        REPO_NAME = "YouTube-Downloader-Pro"
-        VERSION_URL = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/version.txt"
-        RELEASE_URL = f"https://github.com/{REPO_USER}/{REPO_NAME}/releases/latest/download/YouTube.Downloader.Pro.zip"
-        
-        try:
-            import requests
-            response = requests.get(VERSION_URL, timeout=10)
-            response.raise_for_status()
-            remote_version = response.text.strip()
-            self.finished.emit(True, remote_version, RELEASE_URL)
-        except Exception as e:
-            self.finished.emit(False, str(e), "")
-
-
-class DuplicateDialog(QDialog):
-    """Dialog for handling duplicate files."""
-    
-    # Return codes
-    SKIP = 0
-    REPLACE = 1
-    SKIP_ALL = 2
-    REPLACE_ALL = 3
-    
-    def __init__(self, duplicates: List[str], parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Duplicate Files Found")
-        self.setMinimumWidth(500)
-        self.result_action = self.SKIP
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(24, 24, 24, 24)
-        
-        # Header
-        count = len(duplicates)
-        header = QLabel(f"Found {count} file{'s' if count > 1 else ''} already in downloads folder:")
-        header.setFont(QFont("SF Pro Text", 14, QFont.Bold))
-        layout.addWidget(header)
-        
-        # File list
-        file_list = QListWidget()
-        file_list.setMaximumHeight(150)
-        for dup in duplicates[:10]:  # Show max 10
-            file_list.addItem(dup)
-        if count > 10:
-            file_list.addItem(f"... and {count - 10} more")
-        layout.addWidget(file_list)
-        
-        # Question
-        question = QLabel("What would you like to do?")
-        question.setFont(QFont("SF Pro Text", 13))
-        layout.addWidget(question)
-        
-        # Buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(12)
-        
-        skip_btn = QPushButton("Skip")
-        skip_btn.clicked.connect(lambda: self._set_result(self.SKIP))
-        btn_layout.addWidget(skip_btn)
-        
-        replace_btn = QPushButton("Replace")
-        replace_btn.clicked.connect(lambda: self._set_result(self.REPLACE))
-        btn_layout.addWidget(replace_btn)
-        
-        if count > 1:
-            skip_all_btn = QPushButton("Skip All")
-            skip_all_btn.clicked.connect(lambda: self._set_result(self.SKIP_ALL))
-            btn_layout.addWidget(skip_all_btn)
-            
-            replace_all_btn = QPushButton("Replace All")
-            replace_all_btn.clicked.connect(lambda: self._set_result(self.REPLACE_ALL))
-            btn_layout.addWidget(replace_all_btn)
-        
-        layout.addLayout(btn_layout)
-    
-    def _set_result(self, action: int):
-        self.result_action = action
-        self.accept()
-
-
-def extract_youtube_urls(text: str) -> List[str]:
-    """
-    Extract YouTube URLs from any text input.
-    Handles various YouTube URL formats:
-    - youtube.com/watch?v=
-    - youtu.be/
-    - youtube.com/playlist?list=
-    - youtube.com/shorts/
-    - youtube.com/@channel
-    - youtube.com/channel/
-    """
-    patterns = [
-        # Standard watch URLs
-        r'https?://(?:www\.)?youtube\.com/watch\?[^\s<>"\']+',
-        # Short URLs
-        r'https?://youtu\.be/[a-zA-Z0-9_-]+(?:\?[^\s<>"\']*)?',
-        # Playlist URLs
-        r'https?://(?:www\.)?youtube\.com/playlist\?[^\s<>"\']+',
-        # Shorts
-        r'https?://(?:www\.)?youtube\.com/shorts/[a-zA-Z0-9_-]+',
-        # Channel URLs
-        r'https?://(?:www\.)?youtube\.com/@[^\s<>"\'/]+',
-        r'https?://(?:www\.)?youtube\.com/channel/[^\s<>"\']+',
-        r'https?://(?:www\.)?youtube\.com/c/[^\s<>"\']+',
-        # Music URLs
-        r'https?://music\.youtube\.com/watch\?[^\s<>"\']+',
-    ]
-    
-    urls = []
-    for pattern in patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        urls.extend(matches)
-    
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_urls = []
-    for url in urls:
-        # Clean URL (remove trailing punctuation)
-        url = url.rstrip('.,;:!?')
-        if url not in seen:
-            seen.add(url)
-            unique_urls.append(url)
-    
-    return unique_urls
-
-
-
-class DownloadCard(QFrame):
-    """Modern card widget for individual download progress."""
-    
-    def __init__(self, item_id: str, title: str, parent=None):
-        super().__init__(parent)
-        self.item_id = item_id
-        self.setObjectName("downloadCard")
-        self.setFixedHeight(72)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(6)
-        
-        # Title row
-        title_row = QHBoxLayout()
-        self.title_label = QLabel(title[:50] + "..." if len(title) > 50 else title)
-        self.title_label.setFont(QFont("SF Pro Text", 13, QFont.Medium))
-        title_row.addWidget(self.title_label)
-        
-        self.status_label = QLabel("Waiting...")
-        self.status_label.setFont(QFont("SF Pro Text", 11))
-        self.status_label.setStyleSheet("color: #8e8e93;")
-        title_row.addWidget(self.status_label, alignment=Qt.AlignRight)
-        layout.addLayout(title_row)
-        
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(4)
-        layout.addWidget(self.progress_bar)
-    
-    def update_progress(self, progress: float, status: str):
-        self.progress_bar.setValue(int(progress))
-        self.status_label.setText(status)
-    
-    def set_completed(self):
-        self.progress_bar.setValue(100)
-        self.status_label.setText("✓ Done")
-        self.status_label.setStyleSheet("color: #30d158;")
-    
-    def set_failed(self, error: str):
-        self.status_label.setText("✗ Failed")
-        self.status_label.setStyleSheet("color: #ff453a;")
-
+from src.core.worker import DownloadManager, DownloadMode
+from src.core.utils import extract_youtube_urls, resource_path
+from src.desktop.ui.components import DownloadCard, DuplicateDialog
 
 class MainWindow(QMainWindow):
     """Main application window with modern tabbed interface."""
@@ -227,13 +30,12 @@ class MainWindow(QMainWindow):
         self.resize(800, 600)
         
         # Set window icon
-        icon_path = Path(__file__).parent / "icon.png"
-        if icon_path.exists():
-            from PySide6.QtGui import QIcon
-            self.setWindowIcon(QIcon(str(icon_path)))
+        icon_path = resource_path(os.path.join("assets", "icon.png"))
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Default paths
-        self.output_dir = str(Path(__file__).parent / "downloads")
+        self.output_dir = str(Path.cwd() / "downloads")
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         
         # Download manager
@@ -242,7 +44,6 @@ class MainWindow(QMainWindow):
         
         # Track widgets
         self.download_cards: Dict[str, DownloadCard] = {}
-        self.update_worker = None
         
         # Setup
         self._setup_ui()
@@ -603,23 +404,12 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(duplicate_section)
         
-        # Update App
-        update_section = QHBoxLayout()
-        update_section.addStretch()
-        
-        update_btn = QPushButton("Check for Updates")
-        update_btn.setFixedWidth(180)
-        update_btn.clicked.connect(self._on_update_app)
-        update_section.addWidget(update_btn)
-        update_section.addStretch()
-        
-        layout.addLayout(update_section)
-        
         layout.addStretch()
         
         # About
         about_label = QLabel(
-            "YouTube Downloader Pro v1.0\n\n"
+            "YouTube Downloader Pro v1.0\n"
+            "Built with PySide6 & yt-dlp\n\n"
             "Made by Cybertron\n"
             "Contact: ankit.cybertron@gmail.com"
         )
@@ -815,62 +605,6 @@ class MainWindow(QMainWindow):
     
     # Event handlers
     @Slot()
-    def _on_update_app(self):
-        """Check for updates via GitHub Releases (Async)."""
-        if self.update_worker and self.update_worker.isRunning():
-            return
-            
-        self.setCursor(Qt.WaitCursor)
-        self.update_btn.setEnabled(False)
-        self.update_btn.setText("Checking...")
-        
-        self.update_worker = UpdateWorker()
-        self.update_worker.finished.connect(self._on_update_check_finished)
-        self.update_worker.start()
-    
-    @Slot(bool, str, str)
-    def _on_update_check_finished(self, success: bool, result: str, release_url: str):
-        """Handle update check result."""
-        self.setCursor(Qt.ArrowCursor)
-        self.update_btn.setEnabled(True)
-        self.update_btn.setText("Check for Updates")
-        self.update_worker = None
-        
-        CURRENT_VERSION = "1.0.0"
-        
-        if success:
-            remote_version = result
-            try:
-                from packaging import version
-                if version.parse(remote_version) > version.parse(CURRENT_VERSION):
-                    reply = QMessageBox.question(
-                        self, 
-                        "Update Available", 
-                        f"A new version ({remote_version}) is available!\n\n"
-                        "Would you like to download and install it now?",
-                        QMessageBox.Yes | QMessageBox.No
-                    )
-                    
-                    if reply == QMessageBox.Yes:
-                        import webbrowser
-                        webbrowser.open(release_url)
-                        
-                        QMessageBox.information(
-                            self,
-                            "Downloading Update",
-                            "The update is downloading in your browser.\n\n"
-                            "Once downloaded:\n"
-                            "1. Unzip the file\n"
-                            "2. Replace the old app with the new one"
-                        )
-                else:
-                    QMessageBox.information(self, "No Updates", f"You are on the latest version ({CURRENT_VERSION}).")
-            except Exception as e:
-                QMessageBox.warning(self, "Version Error", f"Could not parse version: {e}")
-        else:
-            QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates.\nError: {result}")
-
-    @Slot()
     def _on_browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", self.output_dir)
         if folder:
@@ -969,8 +703,8 @@ class MainWindow(QMainWindow):
             self.history_list.addItem(item)
     
     # Signal handlers
-    @Slot(str, str)
-    def _on_download_started(self, item_id: str, title: str):
+    @Slot(str, str, str)
+    def _on_download_started(self, item_id: str, title: str, thumbnail_url: str = ""):
         self.empty_label.hide()
         card = DownloadCard(item_id, title)
         self.download_cards[item_id] = card
@@ -1010,22 +744,3 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.manager.stop()
         event.accept()
-
-
-def main():
-    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    
-    app = QApplication(sys.argv)
-    app.setApplicationName("YouTube Downloader Pro")
-    
-    window = MainWindow()
-    window.show()
-    
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
