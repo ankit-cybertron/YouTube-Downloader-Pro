@@ -1,23 +1,75 @@
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
 venv/
+env/
+ENV/
 .env
 
-# PyInstaller
-*.spec
-build/
-dist/
-*.app/
-*.exe
-*.pkg
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Mac
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# macOs
 .DS_Store
 
-# Local App Data
-downloads/
+# PyInstaller
+*.manifest
+*.spec
+
+# IDEs
+.vscode/
+.idea/
+
+# App specific
 history.json
-warn-*.txt
-xref-*.html
+failed.txt
+
+# Old files (before restructure)
+app.py
+worker.py
+icon.png
