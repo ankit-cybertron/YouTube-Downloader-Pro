@@ -406,8 +406,14 @@ class MobileWindow(QMainWindow):
         self.resize(430, 932)
         
         # Backend Init
-        self.output_dir = str(Path.cwd() / "downloads")
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        # Backend Init
+        # Use standard Downloads directory to avoid permission issues in app bundles
+        self.output_dir = str(Path.home() / "Downloads" / "YT-Pro-Mobile")
+        try:
+            Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"Failed to create output dir: {e}")
+            self.output_dir = str(Path.home() / "output") # Fallback
         
         self.manager = DownloadManager(output_dir=self.output_dir)
         self._connect_signals()
