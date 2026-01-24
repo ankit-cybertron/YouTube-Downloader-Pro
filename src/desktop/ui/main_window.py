@@ -1,7 +1,7 @@
-
 import sys
 import os
 import requests
+import webbrowser
 from pathlib import Path
 from datetime import datetime
 from typing import List
@@ -29,6 +29,9 @@ COLOR_ACCENT_HOVER = "#E63552"
 COLOR_TEXT_MAIN = "#333333"
 COLOR_TEXT_SUB = "#888888"
 COLOR_BORDER = "#E0E0E0"
+
+APP_VERSION = "v2.1.0"
+GITHUB_REPO = "ankit-cybertron/YouTube-Downloader-Pro"
 
 STYLE_SHEET = f"""
     QMainWindow {{
@@ -456,8 +459,18 @@ class MainWindow(QMainWindow):
         spin.valueChanged.connect(lambda v: self.manager.set_worker_count(v))
         row2.addWidget(spin)
         row2.addWidget(QLabel("(Max simultaneous downloads)"))
-        row2.addStretch()
         gl.addLayout(row2)
+        
+        # Updates
+        gl.addWidget(QLabel("Updates", objectName="sectionTitle"))
+        u_row = QHBoxLayout()
+        u_row.addWidget(QLabel(f"Current Version: {APP_VERSION}", styleSheet="color: #666;"))
+        u_row.addStretch()
+        btn_upd = QPushButton("Check for Updates")
+        btn_upd.setCursor(Qt.PointingHandCursor)
+        btn_upd.clicked.connect(self._check_for_updates)
+        u_row.addWidget(btn_upd)
+        gl.addLayout(u_row)
         
         layout.addWidget(group)
         return tab
@@ -620,8 +633,33 @@ class MainWindow(QMainWindow):
         for i in reversed(range(self.queue_layout.count())):
             w = self.queue_layout.itemAt(i).widget()
             if isinstance(w, DownloadCard):
-                # If checking status was possible, I'd clean only finished
-                # For now allow clearing all visual cards
                 w.deleteLater()
         self.download_widgets.clear()
+
+    def _check_for_updates(self):
+        """Check GitHub for new release."""
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            resp = requests.get(url, timeout=5)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                latest_tag = data.get("tag_name", "").strip()
+                
+                # Check match (e.g. v2.1.0 vs v2.1.0)
+                if latest_tag and latest_tag != APP_VERSION:
+                    reply = QMessageBox.question(
+                        self, "Update Available",
+                        f"A new version ({latest_tag}) is available!\n\n"
+                        "Would you like to open the download page?",
+                        QMessageBox.Yes | QMessageBox.No
+                    )
+                    if reply == QMessageBox.Yes:
+                        webbrowser.open(data.get("html_url", "https://github.com/" + GITHUB_REPO))
+                else:
+                    QMessageBox.information(self, "Up to Date", f"You are using the latest version ({APP_VERSION}).")
+            else:
+                QMessageBox.warning(self, "Check Failed", "Could not connect to update server.")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Update check failed: {str(e)}")
 
