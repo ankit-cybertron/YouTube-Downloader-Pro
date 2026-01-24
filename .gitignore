@@ -70,6 +70,5 @@ history.json
 failed.txt
 
 # Old files (before restructure)
-app.py
-worker.py
+# worker.py was causing issues with src/core/worker.py
 icon.png
