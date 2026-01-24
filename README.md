@@ -5,99 +5,79 @@ A professional, minimal, and smart YouTube Downloader for desktop. Built with Py
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey)
 ![License](https://img.shields.io/badge/License-MIT-green)
+![Version](https://img.shields.io/badge/Version-v2.1.0-purple)
 
-## ✨ Features
+## ✨ Unique Features
 
-*   **Smart Recognition**: Paste text paragraphs containing multiple links, playlists, or channels—the app auto-detects everything.
-*   **Professional UI**: Clean, light theme optimized for readability and ease of use.
-*   **Info-First Workflow**: Fetches video metadata (Title, Thumbnail, Duration) *before* you download.
-*   **Format Control**: Choose between Video (1080p, 720p, 480p) or Audio (MP3, Best Quality).
-*   **Batch Downloading**: Queue management with concurrent downloads.
-*   **History Tracking**: Keep a log of your downloaded content.
+### 🧠 Smart Recognition
+Stop formatting your links manually! Paste **any text**—a paragraph, a chat log, or a list—and the app will intelligently:
+*   Extract all YouTube video links.
+*   Detect Playlists and Channels.
+*   Count the results and offer a **Batch Download**.
 
-## 🚀 Installation & Running
+### ℹ️ Info-First Workflow
+We don't shoot in the dark. The app fetches video details (Title, Thumbnail, Duration) **before** asking you to download, ensuring you get the right content every time.
 
-### Prerequisites
-*   Python 3.10 or higher.
-*   [FFmpeg](https://ffmpeg.org/download.html) (Installed and added to PATH).
+### 🔄 Built-in Updater
+Stay current with a single click. The new **Check for Updates** feature in Settings connects directly to GitHub Releases.
 
-### Setup (Mac/Linux)
+## 🚀 Installation
+
+### Option A: Standalone Executable (Recommended)
+Download the latest release for your OS from the [Releases Page](https://github.com/ankit-cybertron/YouTube-Downloader-Pro/releases).
+*   **Windows**: Run the `.exe` file directly.
+*   **macOS**: Open the `.app` bundle.
+
+### Option B: Run from Source
+
+**Prerequisites:** Python 3.10+ and [FFmpeg](https://ffmpeg.org/download.html).
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/ankit-cybertron/YouTube-Downloader-Pro.git
 cd YouTube-Downloader-Pro
 
-# Create virtual environment
+# Setup Environment
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install
 pip install -r requirements.txt
 
-# Run the app
+# Run
 python run_desktop.py
 ```
 
-### Setup (Windows)
+## 📦 Building Your Own
 
+Create standalone executables for distribution.
+
+**Windows (.exe)**
 ```powershell
-# Create virtual environment
-python -m venv venv
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the app
-python run_desktop.py
-```
-
----
-
-## 📦 Building Executables
-
-You can create standalone applications (`.app` for macOS, `.exe` for Windows) so users don't need Python installed.
-
-### Build on macOS
-Generates a `YouTube Downloader Pro.app` bundle.
-
-```bash
-source venv/bin/activate
-python scripts/build_macos.py
-```
-> Output located in `dist/`
-
-### Build on Windows
-Generates a single `YouTubeDownloaderPro.exe` file.
-
-```powershell
-.\venv\Scripts\activate
+# Run on a Windows machine
 python scripts/build_windows.py
 ```
-> Output located in `dist/`
 
----
+**macOS (.app)**
+```bash
+# Run on a Mac
+python scripts/build_macos.py
+```
 
 ## 🛠 Project Structure
 
 ```
 yt-downloader-pro/
 ├── src/
-│   ├── desktop/
-│   │   ├── main.py          # Entry point
-│   │   └── ui/              # UI definitions (PySide6)
-│   └── core/
-│       ├── worker.py        # Download threads & logic
-│       └── utils.py         # Helpers (Regex, etc)
-├── scripts/                 # Build scripts
-├── assets/                  # Icons and resources
-└── archive/                 # Old mobile/android v1 code
+│   ├── desktop/         # Main GUI Application
+│   ├── core/            # Download Engine & Workers
+│   └── ui/              # Shared Components
+├── scripts/             # Build scripts (PyInstaller)
+├── archive/             # Legacy/Mobile code
+└── dist/                # Output directory for builds
 ```
 
 ## 📜 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-**Note**: This application is for educational purposes. Please respect YouTube's Terms of Service and copyright laws.
+MIT License. See [LICENSE](LICENSE) for details.
+**Disclaimer**: This tool is for personal and educational use. Respect creator copyrights and YouTube's Terms of Service.
